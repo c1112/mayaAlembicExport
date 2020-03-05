@@ -7,7 +7,7 @@ from PySide2.QtCore import QFile, QObject, QCoreApplication, QRegExp
 class Form(QObject):
 
     def __init__(self, ui_file, parent=None):
-        #setup form
+        #setup form trying something
         super(Form, self).__init__(parent)
         ui_file = QFile(ui_file)
         ui_file.open(QFile.ReadOnly)
