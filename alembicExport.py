@@ -111,11 +111,13 @@ class Form(QtCore.QObject):
         self.file_export_path = self.file_export_path.replace('\\','/')
         self.update_btn_export_name()
 
+    # TODO: make host agnostic
     def build_stepsize(self):
         stepsize = self.stepsize.currentText()
         data = {"1":"1", "1/2":"0.5", "1/4":"0.25", "1/8":"0.125", "1/16":"0.0625"}
         return ["-step", data[stepsize]]
 
+    # TODO: make host agnostic
     def build_attrs(self):
         '''Build out the string required for maya '''
         attr_list = []
@@ -127,6 +129,7 @@ class Form(QtCore.QObject):
             attrs += ['-attr',attr]
         return attrs
 
+    # TODO: make host agnostic
     def build_checkboxes(self):
         checkboxes = self.window.findChildren(QtWidgets.QCheckBox, QtCore.QRegExp("_abcopt$"))
         values = []
@@ -137,13 +140,16 @@ class Form(QtCore.QObject):
 
         return values
 
+    # TODO: make host agnostic
     def build_maya_export(self):
         return ['-root', self.to_export.currentItem().text()]
 
+    # TODO: make host agnostic
     def build_fileout(self):
         token = self.ftoken.text()
         return ['-file', '%s/%s.abc' % (self.file_export_path,token)]
 
+    # TODO: make host agnostic
     def build_framerange(self):
         ret = []
         range = self.duration.currentText()
@@ -153,6 +159,7 @@ class Form(QtCore.QObject):
             ret = ['-frameRange','1002','1002']
         return ret
 
+    # TODO: make host agnostic
     def build_command(self):
         cmd             = ['AbcExport','-j']
         cmd            += self.build_framerange()
