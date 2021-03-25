@@ -22,8 +22,8 @@ class Form(QtCore.QObject):
         ui_file.close()
         #################################
         # Callbacks
-        # self.get_selected_callback = get_selected_callback ** Not implemented yet
         self.process_form_callback = process_form_callback
+        # self.get_selected_callback = get_selected_callback ** Not implemented yet
 
         # Globals
         self.ftoken     = self.window.line_ftoken
@@ -41,7 +41,7 @@ class Form(QtCore.QObject):
         btn_export.clicked.connect(self.export_handler)
 
         btn_cancel      = self.window.btn_cancel
-        btn_cancel.clicked.connect(self.cancel_handler)
+        btn_cancel.clicked.connect(self.close_handler)
 
         btn_addattr     = self.window.btn_addattr
         btn_addattr.clicked.connect(self.addattr_handler)
@@ -80,15 +80,15 @@ class Form(QtCore.QObject):
         for cbox in checkboxes:
             cbox.setChecked(True)
 
-        #set token
+        # set token
         self.ftoken.setText("output")
-        #add stepsizes
+        # add stepsizes
         self.stepsize.addItems(['1', '1/2', '1/4', '1/8', '1/16'])
-        #add duration
+        # add duration
         self.duration.addItems(['Time Slider', 'Current Frame'])
-        #add run location
+        # add run location
         self.runloc.addItems(['Local', 'Farm'])
-        #add defualt item to list widget
+        # add defualt item to list widget
         item = QtWidgets.QListWidgetItem("Selected Items")
         self.to_export.addItem(item)
         self.to_export.setCurrentItem(item)
@@ -114,16 +114,14 @@ class Form(QtCore.QObject):
     def build_stepsize(self):
         stepsize = self.stepsize.currentText()
         data = {"1":"1", "1/2":"0.5", "1/4":"0.25", "1/8":"0.125", "1/16":"0.0625"}
-        # return "-step %s" % data[stepsize]
         return ["-step", data[stepsize]]
 
     def build_attrs(self):
-        ''' Build out the string required for maya '''
+        '''Build out the string required for maya '''
         attr_list = []
         for i in range(self.to_attrs.count()):
             attr_list.append(self.to_attrs.item(i).text())
 
-        # attrs = ' '.join(['-attr ' + s for s in attr_list])
         attrs = []
         for attr in attr_list:
             attrs += ['-attr',attr]
@@ -138,51 +136,33 @@ class Form(QtCore.QObject):
                 values.append("-%s" % tmp[1])
 
         return values
-        # out = ' '.join(values)
-        # return out
 
     def build_maya_export(self):
         return ['-root', self.to_export.currentItem().text()]
-        # return "-root %s" % self.to_export.currentItem().text()
 
     def build_fileout(self):
-        # self.query_file_output_path(self.file_export_path)
-
         token = self.ftoken.text()
-        # return '-file "%s/%s.abc"' % (self.file_export_path,token)
         return ['-file', '%s/%s.abc' % (self.file_export_path,token)]
 
     def build_framerange(self):
         ret = []
         range = self.duration.currentText()
         if range == 'Time Slider':
-            # return "-frameRange %s %s" % ("1001", "1001")
             ret = ['-frameRange','1001','1001']
         if range == 'Current Frame':
-            # return "-frameRange %s %s" % ("1002", "1002")
             ret = ['-frameRange','1002','1002']
         return ret
 
     def build_command(self):
         cmd             = ['AbcExport','-j']
-        # base_cmd        = "AbcExport -j"
         cmd            += self.build_framerange()
-        # frame_range     = self.build_framerange()
-        # data_format     = "-dataFormat ogawa"
         cmd            += ["-dataFormat", "ogawa"]
-        # file            = self.build_fileout()
         cmd            += self.build_fileout()
-        # selection       = self.build_maya_export()
         cmd            += self.build_maya_export()
-        # checkboxes      = self.build_checkboxes()
         cmd            += self.build_checkboxes()
-        # attrs           = self.build_attrs()
         cmd            += self.build_attrs()
-        # stepsize        = self.build_stepsize()
         cmd            += self.build_stepsize()
 
-        # compiled_cmd    = '%s "%s %s %s %s %s %s %s"' % (base_cmd, frame_range, stepsize, attrs, checkboxes, data_format, selection, file)
-        # return compiled_cmd
         return cmd
 
 
@@ -193,21 +173,16 @@ class Form(QtCore.QObject):
 
         errors = None
         if runloc == 'Local':
-            # build for local ** Not Tested
             command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
             print("run local")
-            # print(command)
             if self.process_form_callback:
                 errors = self.process_form_callback(command_list, run_on='local')
         elif runloc == 'Farm':
-            # build for farm ** Not Tested
             print("run farm")
             if self.process_form_callback:
                 errors = self.process_form_callback(command_list, run_on='farm')
 
         if errors:
-            # error_dialog = QtWidgets.QErrorMessage()
-            # error_dialog.showMessage('Oh no!')
             msg = QtWidgets.QMessageBox()
             msg.setIcon(QtWidgets.QMessageBox.Critical)
             msg.setText('Export errors were found')
@@ -215,9 +190,13 @@ class Form(QtCore.QObject):
             msg.setWindowTitle("%d Errors"%len(errors))
             msg.exec_()
 
+            # return and do not close window
+            return len(errors)
+        
+        self.close_handler()
 
-    def cancel_handler(self):
-        QtCore.QCoreApplication.instance().quit()
+    def close_handler(self):
+        self.window.close()
 
     def addattr_handler(self):
         text = self.attr.text()
@@ -229,21 +208,24 @@ class Form(QtCore.QObject):
         current_item = self.to_attrs.currentRow()
         self.to_attrs.takeItem(current_item)
 
+#######################  CALLBACKS  #########################################
 # this is an example of the callback in the host application
 # your host method should contain 2 args command_list and run_on
 # you will get back a list of command values
 # parse it into your host app abc excport format and handle execution
 # return 0 for success and list of errors for fail
-
 def example_process_form_callback(command_list, run_on):
+    # build for farm ** Not Tested
     if run_on=='farm':
         return ['Test error','second little problem','another thing happened','oh no!']
     command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
+    # build for local ** Not Tested
     print('%s: %s'%(run_on,command))
     return 0
+
 # def example_get_selected_callback(command_list, run_on):
-#     command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
-#     print('%s: %s'%(run_on,command))
+#     return selected items to display in dialog
+#######################  END CALLBACKS  #########################################
 
 def main(args):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(args)
