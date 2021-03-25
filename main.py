@@ -1,43 +1,56 @@
-import sys
+import sys,os
 
+# TODO: Make this work with PyQt# PySide#, Qt
 from PySide2.QtUiTools import QUiLoader
-from PySide2.QtWidgets import QApplication, QPushButton, QLineEdit, QListWidgetItem, QCheckBox
-from PySide2.QtCore import QFile, QObject, QCoreApplication, QRegExp
+from PySide2 import QtWidgets 
+from PySide2 import QtCore
 
-class Form(QObject):
+def getUserDirectory():
+    # implement for linux
+    return os.environ.get('APPDATA')# windows
 
-    def __init__(self, ui_file, parent=None):
+class Form(QtCore.QObject):
+
+    def __init__(self, ui_file, parent=None, process_form_callback=None):#, get_selected_callback=None):
         #setup form trying something
         super(Form, self).__init__(parent)
-        ui_file = QFile(ui_file)
-        ui_file.open(QFile.ReadOnly)
+        ui_file = QtCore.QFile(ui_file)
+        ui_file.open(QtCore.QFile.ReadOnly)
 
         loader = QUiLoader()
         self.window = loader.load(ui_file)
         ui_file.close()
         #################################
+        # Callbacks
+        # self.get_selected_callback = get_selected_callback ** Not implemented yet
+        self.process_form_callback = process_form_callback
 
         # Globals
-        self.ftoken = self.window.line_ftoken
-        self.stepsize = self.window.cbox_stepsize
-        self.duration = self.window.cbox_duration
-        self.runloc = self.window.cbox_runloc
-        self.to_export = self.window.list_toexport
-        self.to_attrs = self.window.list_attrs
-        self.attr = self.window.line_attr
+        self.ftoken     = self.window.line_ftoken
+        self.stepsize   = self.window.cbox_stepsize
+        self.duration   = self.window.cbox_duration
+        self.runloc     = self.window.cbox_runloc
+        self.to_export  = self.window.list_toexport
+        self.to_attrs   = self.window.list_attrs
+        self.attr       = self.window.line_attr
+
+        self.file_export_path   = ''# look this up from settings
 
         # Buttons
-        btn_export = self.window.btn_export
+        btn_export      = self.window.btn_export
         btn_export.clicked.connect(self.export_handler)
 
-        btn_cancel = self.window.btn_cancel
+        btn_cancel      = self.window.btn_cancel
         btn_cancel.clicked.connect(self.cancel_handler)
 
-        btn_addattr = self.window.btn_addattr
+        btn_addattr     = self.window.btn_addattr
         btn_addattr.clicked.connect(self.addattr_handler)
 
-        btn_removeattr = self.window.btn_removeattr
+        btn_removeattr  = self.window.btn_removeattr
         btn_removeattr.clicked.connect(self.removeattr_handler)
+
+        btn_export_path  = self.window.btn_export_path
+        btn_export_path.clicked.connect(self.set_file_export_path)
 
         # Misc signals
         self.attr.returnPressed.connect(self.addattr_handler)
@@ -47,6 +60,14 @@ class Form(QObject):
 
         #Show window
         self.window.show()
+
+        # get the file_export_path
+        self.file_export_path = getUserDirectory()
+        if self.file_export_path:
+            self.file_export_path = self.file_export_path.replace('\\','/')
+        # - set the file_export_path to settings 
+        self.update_btn_export_name()
+
 
     def set_defaults(self):
         ui = self.window
@@ -68,14 +89,33 @@ class Form(QObject):
         #add run location
         self.runloc.addItems(['Local', 'Farm'])
         #add defualt item to list widget
-        item = QListWidgetItem("Selected Items")
+        item = QtWidgets.QListWidgetItem("Selected Items")
         self.to_export.addItem(item)
         self.to_export.setCurrentItem(item)
+
+    def update_btn_export_name(self):
+        self.window.btn_export_path.setText(('%s'%self.file_export_path).replace('\\','/'))
+
+    def set_file_export_path(self,default_directory=None):
+        if not default_directory:
+            default_directory = self.file_export_path
+
+
+        default_directory = self.file_export_path.replace('\\','/')
+        print('Export file path: %s'%self.file_export_path)
+        self.file_export_path = QtWidgets.QFileDialog.getExistingDirectory(None, caption='Set Export Directory', dir=default_directory)
+        
+        if not self.file_export_path:
+            self.file_export_path = getUserDirectory()
+
+        self.file_export_path = self.file_export_path.replace('\\','/')
+        self.update_btn_export_name()
 
     def build_stepsize(self):
         stepsize = self.stepsize.currentText()
         data = {"1":"1", "1/2":"0.5", "1/4":"0.25", "1/8":"0.125", "1/16":"0.0625"}
-        return "-step %s" % data[stepsize]
+        # return "-step %s" % data[stepsize]
+        return ["-step", data[stepsize]]
 
     def build_attrs(self):
         ''' Build out the string required for maya '''
@@ -83,75 +123,135 @@ class Form(QObject):
         for i in range(self.to_attrs.count()):
             attr_list.append(self.to_attrs.item(i).text())
 
-        attrs = ' '.join(['-attr ' + s for s in attr_list])
-
+        # attrs = ' '.join(['-attr ' + s for s in attr_list])
+        attrs = []
+        for attr in attr_list:
+            attrs += ['-attr',attr]
         return attrs
 
     def build_checkboxes(self):
-        checkboxes = self.window.findChildren(QCheckBox, QRegExp("_abcopt$"))
+        checkboxes = self.window.findChildren(QtWidgets.QCheckBox, QtCore.QRegExp("_abcopt$"))
         values = []
         for x in checkboxes:
             if x.isChecked():
                 tmp = x.objectName().split('_')
                 values.append("-%s" % tmp[1])
 
-        out = ' '.join(values)
-        return out
+        return values
+        # out = ' '.join(values)
+        # return out
 
     def build_maya_export(self):
-        return "-root %s" % self.to_export.currentItem().text()
+        return ['-root', self.to_export.currentItem().text()]
+        # return "-root %s" % self.to_export.currentItem().text()
 
     def build_fileout(self):
+        # self.query_file_output_path(self.file_export_path)
+
         token = self.ftoken.text()
-        return "-file C:/Users/brendan.fitzgerald/Desktop/%s.abc" % token
+        # return '-file "%s/%s.abc"' % (self.file_export_path,token)
+        return ['-file', '%s/%s.abc' % (self.file_export_path,token)]
 
     def build_framerange(self):
+        ret = []
         range = self.duration.currentText()
         if range == 'Time Slider':
-            return "-frameRange %s %s" % ("1001", "1001")
+            # return "-frameRange %s %s" % ("1001", "1001")
+            ret = ['-frameRange','1001','1001']
         if range == 'Current Frame':
-            return "-frameRange %s %s" % ("1002", "1002")
+            # return "-frameRange %s %s" % ("1002", "1002")
+            ret = ['-frameRange','1002','1002']
+        return ret
 
     def build_command(self):
-        base_cmd = "AbcExport -j"
-        frame_range = self.build_framerange()
-        data_format = "-dataFormat ogawa"
-        file = self.build_fileout()
-        selection = self.build_maya_export()
-        checkboxes = self.build_checkboxes()
-        attrs = self.build_attrs()
-        stepsize = self.build_stepsize()
+        cmd             = ['AbcExport','-j']
+        # base_cmd        = "AbcExport -j"
+        cmd            += self.build_framerange()
+        # frame_range     = self.build_framerange()
+        # data_format     = "-dataFormat ogawa"
+        cmd            += ["-dataFormat", "ogawa"]
+        # file            = self.build_fileout()
+        cmd            += self.build_fileout()
+        # selection       = self.build_maya_export()
+        cmd            += self.build_maya_export()
+        # checkboxes      = self.build_checkboxes()
+        cmd            += self.build_checkboxes()
+        # attrs           = self.build_attrs()
+        cmd            += self.build_attrs()
+        # stepsize        = self.build_stepsize()
+        cmd            += self.build_stepsize()
 
-        compiled_cmd = '%s "%s %s %s %s %s %s %s"' % (base_cmd, frame_range, stepsize, attrs, checkboxes, data_format, selection, file)
-        return compiled_cmd
+        # compiled_cmd    = '%s "%s %s %s %s %s %s %s"' % (base_cmd, frame_range, stepsize, attrs, checkboxes, data_format, selection, file)
+        # return compiled_cmd
+        return cmd
 
 
     def export_handler(self):
         ''' The handler that is executed when the execute button is pressed '''
-        command = self.build_command()
-        runloc = self.runloc.currentText()
+        command_list    = self.build_command()
+        runloc          = self.runloc.currentText()
 
+        errors = None
         if runloc == 'Local':
+            # build for local ** Not Tested
+            command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
             print("run local")
-            print(self.build_command())
+            # print(command)
+            if self.process_form_callback:
+                errors = self.process_form_callback(command_list, run_on='local')
         elif runloc == 'Farm':
+            # build for farm ** Not Tested
             print("run farm")
-            print(self.build_command())
+            if self.process_form_callback:
+                errors = self.process_form_callback(command_list, run_on='farm')
+
+        if errors:
+            # error_dialog = QtWidgets.QErrorMessage()
+            # error_dialog.showMessage('Oh no!')
+            msg = QtWidgets.QMessageBox()
+            msg.setIcon(QtWidgets.QMessageBox.Critical)
+            msg.setText('Export errors were found')
+            msg.setInformativeText('\n'.join(errors))
+            msg.setWindowTitle("%d Errors"%len(errors))
+            msg.exec_()
+
 
     def cancel_handler(self):
-        QCoreApplication.instance().quit()
+        QtCore.QCoreApplication.instance().quit()
 
     def addattr_handler(self):
         text = self.attr.text()
         if text != "":
             self.attr.clear()
-            self.to_attrs.addItem(QListWidgetItem(text))
+            self.to_attrs.addItem(QtWidgets.QListWidgetItem(text))
 
     def removeattr_handler(self):
         current_item = self.to_attrs.currentRow()
         self.to_attrs.takeItem(current_item)
 
+# this is an example of the callback in the host application
+# your host method should contain 2 args command_list and run_on
+# you will get back a list of command values
+# parse it into your host app abc excport format and handle execution
+# return 0 for success and list of errors for fail
+
+def example_process_form_callback(command_list, run_on):
+    if run_on=='farm':
+        return ['Test error','second little problem','another thing happened','oh no!']
+    command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
+    print('%s: %s'%(run_on,command))
+    return 0
+# def example_get_selected_callback(command_list, run_on):
+#     command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
+#     print('%s: %s'%(run_on,command))
+
+def main(args):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(args)
+    form = Form('alembicexporter.ui', process_form_callback=example_process_form_callback)
+    return app.exec_()
+
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    form = Form('alembicexporter.ui')
-    sys.exit(app.exec_())
+    args = sys.argv[1:]
+    args += [
+    ]
+    sys.exit(main(args))

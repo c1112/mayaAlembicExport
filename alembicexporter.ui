@@ -50,6 +50,20 @@
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_3">
+             <item>
+              <widget class="QLabel" name="label_file_export">
+               <property name="text">
+                <string>Export File Path:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_export_path">
+               <property name="text">
+                <string>Export Directory:</string>
+               </property>
+              </widget>
+             </item>
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_4">
            <item>
