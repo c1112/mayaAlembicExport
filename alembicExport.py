@@ -94,7 +94,8 @@ class Form(QtCore.QObject):
         self.to_export.setCurrentItem(item)
 
     def update_btn_export_name(self):
-        self.window.btn_export_path.setText(('%s'%self.file_export_path).replace('\\','/'))
+        # self.window.btn_export_path.setText(('%s'%self.file_export_path).replace('\\','/'))
+        self.window.lbl_file_export_value.setText(('%s'%self.file_export_path).replace('\\','/'))
 
     def set_file_export_path(self,default_directory=None):
         if not default_directory:
