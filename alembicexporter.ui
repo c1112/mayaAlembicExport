@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>727</width>
-    <height>427</height>
+    <width>728</width>
+    <height>429</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -40,7 +40,7 @@
      <property name="movable">
       <bool>false</bool>
      </property>
-     <property name="tabBarAutoHide" stdset="0">
+     <property name="tabBarAutoHide">
       <bool>false</bool>
      </property>
      <widget class="QWidget" name="tab">
@@ -94,18 +94,55 @@
           </layout>
          </item>
          <item>
+          <widget class="QLabel" name="label_2">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>Items To Export:  </string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <layout class="QHBoxLayout" name="horizontalLayout_4">
            <item>
             <layout class="QVBoxLayout" name="verticalLayout_2">
              <item>
-              <widget class="QLabel" name="label_2">
-               <property name="text">
-                <string>To Export:</string>
+              <layout class="QHBoxLayout" name="horizontalLayout_9">
+               <property name="bottomMargin">
+                <number>10</number>
                </property>
-              </widget>
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>Type:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="cmbo_item_types"/>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_7">
+                 <property name="text">
+                  <string>  Filter:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="txt_filter_value"/>
+               </item>
+              </layout>
              </item>
              <item>
-              <widget class="QListWidget" name="list_toexport"/>
+              <widget class="QListWidget" name="list_toexport">
+               <property name="selectionMode">
+                <enum>QAbstractItemView::MultiSelection</enum>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>

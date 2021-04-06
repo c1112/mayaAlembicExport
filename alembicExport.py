@@ -11,7 +11,14 @@ def getUserDirectory():
 
 class Form(QtCore.QObject):
 
-    def __init__(self, ui_file, parent=None, process_form_callback=None):#, get_selected_callback=None):
+    def __init__(self, 
+                        ui_file, parent=None, 
+                        file_export_path=None, 
+                        process_form_callback=None, 
+                        get_framerange_callback=None, 
+                        item_type_callback=None, 
+                        # lock_export_path=None,
+                        ):#, get_selected_callback=None):
         #setup form trying something
         super(Form, self).__init__(parent)
         ui_file = QtCore.QFile(ui_file)
@@ -22,7 +29,18 @@ class Form(QtCore.QObject):
         ui_file.close()
         #################################
         # Callbacks
-        self.process_form_callback = process_form_callback
+        self.process_form_callback      = process_form_callback
+        self.get_framerange_callback        = get_framerange_callback
+        self.item_type_callback         = item_type_callback
+        if not self.item_type_callback:
+            self.item_type_callback = {'Selected':{'callback':lambda x:['item_%d'%i for i in range(5)]}}
+
+        if not self.get_framerange_callback:
+            self.get_framerange_callback = {
+                                            'Time Slider':{ 'callback':lambda x: (1001,1100) },
+                                            'Current Frame':{ 'callback':lambda x: (1001,1001) },
+                                            }
+        
         # self.get_selected_callback = get_selected_callback ** Not implemented yet
 
         # Globals
@@ -34,7 +52,8 @@ class Form(QtCore.QObject):
         self.to_attrs   = self.window.list_attrs
         self.attr       = self.window.line_attr
 
-        self.file_export_path   = ''# look this up from settings
+        # self.window.keyPressedEvent = self.keyPressEvent
+        # self.file_export_path   = file_export_path or ''# look this up from settings
 
         # Buttons
         btn_export      = self.window.btn_export
@@ -52,6 +71,18 @@ class Form(QtCore.QObject):
         btn_export_path  = self.window.btn_export_path
         btn_export_path.clicked.connect(self.set_file_export_path)
 
+        if file_export_path:
+            btn_export_path.setEnabled(0)
+            btn_export_path.setToolTip('Value was set by pipeline. Cannot be changed in this instance')
+        # item types and filters 
+        txt_filter_value  = self.window.txt_filter_value
+        txt_filter_value.textChanged[str].connect(self.update_txt_filter_value)
+
+        cmbo_item_types  = self.window.cmbo_item_types
+        cmbo_item_types.currentTextChanged.connect(self.update_cmbo_item_types)
+
+
+
         # Misc signals
         self.attr.returnPressed.connect(self.addattr_handler)
 
@@ -62,12 +93,33 @@ class Form(QtCore.QObject):
         self.window.show()
 
         # get the file_export_path
-        self.file_export_path = getUserDirectory()
+        self.file_export_path = file_export_path or getUserDirectory()
         if self.file_export_path:
             self.file_export_path = self.file_export_path.replace('\\','/')
         # - set the file_export_path to settings 
         self.update_btn_export_name()
 
+    def keyPressEvent(self,evt):
+        print('key: %s'%evt.key())
+
+    def set_file_export_path_readonly(self,val):
+        val = True if val else False
+        self.window.btn_export_path.setEnabled(not val)    
+
+    def update_cmbo_item_types(self,val):
+        print('cmbo:val: %s'%val)
+        cb = self.item_type_callback.get(val,{}).get('callback')
+        if cb:
+            self.to_export.clear()
+            for item in cb(val):
+                try:
+                    self.to_export.addItem(item)
+                    # print(' -> %s'%item)
+                except:
+                    pass
+
+    def update_txt_filter_value(self,val):
+        print('filter:val: %s'%val)
 
     def set_defaults(self):
         ui = self.window
@@ -85,13 +137,27 @@ class Form(QtCore.QObject):
         # add stepsizes
         self.stepsize.addItems(['1', '1/2', '1/4', '1/8', '1/16'])
         # add duration
-        self.duration.addItems(['Time Slider', 'Current Frame'])
+        # self.duration.addItems(['Time Slider', 'Current Frame'])
+
+        if self.get_framerange_callback:
+            self.duration.clear()
+                
+            for key in self.get_framerange_callback:
+                self.duration.addItem(key)
+
+
         # add run location
         self.runloc.addItems(['Local', 'Farm'])
         # add defualt item to list widget
-        item = QtWidgets.QListWidgetItem("Selected Items")
-        self.to_export.addItem(item)
-        self.to_export.setCurrentItem(item)
+
+        # clear the export list
+        self.to_export.clear()
+        # push types to combo
+        for key in self.item_type_callback:
+            self.window.cmbo_item_types.addItem(key)
+        # item = QtWidgets.QListWidgetItem("Selected Items")
+        # self.to_export.addItem(item)
+        # self.to_export.setCurrentItem(item)
 
     def update_btn_export_name(self):
         # self.window.btn_export_path.setText(('%s'%self.file_export_path).replace('\\','/'))
@@ -143,7 +209,10 @@ class Form(QtCore.QObject):
 
     # TODO: make host agnostic
     def build_maya_export(self):
-        return ['-root', self.to_export.currentItem().text()]
+        ret = []
+        for item in self.to_export.selectedItems():
+            ret += ['-root',item.text()]
+        return ret#['-root', self.to_export.currentItem().text()]
 
     # TODO: make host agnostic
     def build_fileout(self):
@@ -153,11 +222,16 @@ class Form(QtCore.QObject):
     # TODO: make host agnostic
     def build_framerange(self):
         ret = []
-        range = self.duration.currentText()
-        if range == 'Time Slider':
-            ret = ['-frameRange','1001','1001']
-        if range == 'Current Frame':
-            ret = ['-frameRange','1002','1002']
+        frameValue = self.duration.currentText()
+        if self.get_framerange_callback:
+            cb = self.get_framerange_callback.get(frameValue,{}).get('callback')
+            if cb:
+                ret += cb(frameValue)
+
+        # if range == 'Time Slider':
+        #     ret = ['-frameRange','1001','1001']
+        # if range == 'Current Frame':
+        #     ret = ['-frameRange','1002','1002']
         return ret
 
     # TODO: make host agnostic
@@ -231,13 +305,23 @@ def example_process_form_callback(command_list, run_on):
     print('%s: %s'%(run_on,command))
     return 0
 
+# def example_item_type_callback(key):
 # def example_get_selected_callback(command_list, run_on):
 #     return selected items to display in dialog
 #######################  END CALLBACKS  #########################################
 
 def main(args):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(args)
-    form = Form('alembicexporter.ui', process_form_callback=example_process_form_callback)
+    form = Form('alembicexporter.ui', 
+                process_form_callback=example_process_form_callback,
+                item_type_callback={'Selected':{'callback':lambda x:['item_%d'%i for i in range(7)]},
+                                    'Sets':{'callback':lambda x:['set_%d'%i for i in range(4)]},
+                                    # 'Cameras':{'callback':lambda x:['camera_%d'%i for i in range(4)]},
+                                    # 'Geometry':{'callback':lambda x:['geo_%d'%i for i in range(20)]},
+                                        },
+                file_export_path='d:/dev/data',
+
+                )
     return app.exec_()
 
 if __name__ == '__main__':
