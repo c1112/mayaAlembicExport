@@ -9,6 +9,9 @@ def getUserDirectory():
     # implement for linux
     return os.environ.get('APPDATA')# windows
 
+
+UI_FILEPATH = os.path.join(os.path.dirname(__file__),'alembicexporter.ui').replace('\\','/')
+
 class Form(QtCore.QObject):
 
     def __init__(self, 
@@ -30,7 +33,7 @@ class Form(QtCore.QObject):
         #################################
         # Callbacks
         self.process_form_callback      = process_form_callback
-        self.get_framerange_callback        = get_framerange_callback
+        self.get_framerange_callback    = get_framerange_callback
         self.item_type_callback         = item_type_callback
         if not self.item_type_callback:
             self.item_type_callback = {'Selected':{'callback':lambda x:['item_%d'%i for i in range(5)]}}
@@ -90,7 +93,7 @@ class Form(QtCore.QObject):
         self.set_defaults()
 
         #Show window
-        self.window.show()
+        # self.window.show()
 
         # get the file_export_path
         self.file_export_path = file_export_path or getUserDirectory()
@@ -308,11 +311,9 @@ def example_process_form_callback(command_list, run_on):
 # def example_item_type_callback(key):
 # def example_get_selected_callback(command_list, run_on):
 #     return selected items to display in dialog
-#######################  END CALLBACKS  #########################################
 
-def main(args):
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(args)
-    form = Form('alembicexporter.ui', 
+def get_sample_form(args=None):
+    sample_form = Form( UI_FILEPATH,#'alembicexporter.ui', 
                 process_form_callback=example_process_form_callback,
                 item_type_callback={'Selected':{'callback':lambda x:['item_%d'%i for i in range(7)]},
                                     'Sets':{'callback':lambda x:['set_%d'%i for i in range(4)]},
@@ -322,10 +323,73 @@ def main(args):
                 file_export_path='d:/dev/data',
 
                 )
-    return app.exec_()
+    return sample_form
+
+def get_maya_form(args=None):
+    # setup maya standalone
+    # import maya.standalone
+    # maya.standalone.initialize()
+
+    # load maya api
+    from maya import cmds
+
+    # callback for getting frame range options
+    start           = cmds.playbackOptions( q=1, min=True )
+    end             = cmds.playbackOptions( q=1, max=True )
+    frame_range     = [start, end]
+
+    current_frame   = cmds.currentTime(q=1)
+    frame_range_callback = {
+                            'Time Slider':{ 'callback':lambda x: frame_range },
+                            'Current Frame':{ 'callback':lambda x: (current_frame,current_frame) },
+    }
+    # callback for getting selected item type
+
+    # return maya form
+    maya_form = Form( UI_FILEPATH,#'alembicexporter.ui', 
+                process_form_callback=example_process_form_callback,
+                item_type_callback={'Selected':{'callback':lambda x:['item_%d'%i for i in range(7)]},
+                                    'Sets':{'callback':lambda x:['set_%d'%i for i in range(4)]},
+                                    # 'Cameras':{'callback':lambda x:['camera_%d'%i for i in range(4)]},
+                                    # 'Geometry':{'callback':lambda x:['geo_%d'%i for i in range(20)]},
+                                        },
+                get_framerange_callback=frame_range_callback,
+                file_export_path='d:/dev/data',
+
+                )
+    return maya_form
+
+#######################  END CALLBACKS  #########################################
+
+def main(args):
+    # grab app instance or create one
+    ret = 0
+
+    inst = QtWidgets.QApplication.instance()
+    app  = inst or QtWidgets.QApplication(args)
+
+
+    form = None
+
+    # not best practice in memory/dev 
+    if 'maya' in args:
+        form = get_maya_form(args)
+    if 'sample' in args:
+        form = get_sample_form(args)
+
+    if form:
+        form.window.show()#exec_()
+
+    # trouble sho0ting window not staying open in maya
+    if not inst:
+        ret = app.exec_()
+
+    return ret
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    args += [
+    args += [ 
+        #'maya',
+        'sample',
     ]
     sys.exit(main(args))
