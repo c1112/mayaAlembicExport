@@ -1,4 +1,5 @@
 import sys,os
+import time
 
 # TODO: Make this work with PyQt# PySide#, Qt
 from PySide2.QtUiTools import QUiLoader
@@ -12,6 +13,10 @@ def getUserDirectory():
 
 UI_FILEPATH = os.path.join(os.path.dirname(__file__),'alembicexporter.ui').replace('\\','/')
 
+DEFAULT_STEPSIZES       =  {"1":"1", "1/2":"0.5", "1/4":"0.25", "1/8":"0.125", "1/16":"0.0625"}
+DEFAULT_PROC_LOCATION   = ['Farm','Local']
+
+
 class Form(QtCore.QObject):
 
     def __init__(self, 
@@ -19,7 +24,8 @@ class Form(QtCore.QObject):
                         file_export_path=None, 
                         process_form_callback=None, 
                         get_framerange_callback=None, 
-                        item_type_callback=None, 
+                        item_type_callback=None,
+                        process_location_list=None, 
                         # lock_export_path=None,
                         ):#, get_selected_callback=None):
         #setup form trying something
@@ -35,14 +41,15 @@ class Form(QtCore.QObject):
         self.process_form_callback      = process_form_callback
         self.get_framerange_callback    = get_framerange_callback
         self.item_type_callback         = item_type_callback
-        if not self.item_type_callback:
-            self.item_type_callback = {'Selected':{'callback':lambda x:['item_%d'%i for i in range(5)]}}
+        self.process_location_list      = process_location_list or DEFAULT_PROC_LOCATION
+        # if not self.item_type_callback:
+        #     self.item_type_callback = {'Selected':{'callback':lambda x:['item_%d'%i for i in range(5)]}}
 
-        if not self.get_framerange_callback:
-            self.get_framerange_callback = {
-                                            'Time Slider':{ 'callback':lambda x: (1001,1100) },
-                                            'Current Frame':{ 'callback':lambda x: (1001,1001) },
-                                            }
+        # if not self.get_framerange_callback:
+        #     self.get_framerange_callback = {
+        #                                     'Time Slider':{ 'callback':lambda x: (1001,1100) },
+        #                                     'Current Frame':{ 'callback':lambda x: (1001,1001) },
+        #                                     }
         
         # self.get_selected_callback = get_selected_callback ** Not implemented yet
 
@@ -81,8 +88,8 @@ class Form(QtCore.QObject):
         txt_filter_value  = self.window.txt_filter_value
         txt_filter_value.textChanged[str].connect(self.update_txt_filter_value)
 
-        cmbo_item_types  = self.window.cmbo_item_types
-        cmbo_item_types.currentTextChanged.connect(self.update_cmbo_item_types)
+        self.cmbo_item_types  = self.window.cmbo_item_types
+        self.cmbo_item_types.currentTextChanged.connect(self.update_cmbo_item_types)
 
 
 
@@ -138,7 +145,7 @@ class Form(QtCore.QObject):
         # set token
         self.ftoken.setText("output")
         # add stepsizes
-        self.stepsize.addItems(['1', '1/2', '1/4', '1/8', '1/16'])
+        self.stepsize.addItems(list(DEFAULT_STEPSIZES.keys()))
         # add duration
         # self.duration.addItems(['Time Slider', 'Current Frame'])
 
@@ -150,7 +157,7 @@ class Form(QtCore.QObject):
 
 
         # add run location
-        self.runloc.addItems(['Local', 'Farm'])
+        self.runloc.addItems(self.process_location_list)
         # add defualt item to list widget
 
         # clear the export list
@@ -158,9 +165,6 @@ class Form(QtCore.QObject):
         # push types to combo
         for key in self.item_type_callback:
             self.window.cmbo_item_types.addItem(key)
-        # item = QtWidgets.QListWidgetItem("Selected Items")
-        # self.to_export.addItem(item)
-        # self.to_export.setCurrentItem(item)
 
     def update_btn_export_name(self):
         # self.window.btn_export_path.setText(('%s'%self.file_export_path).replace('\\','/'))
@@ -182,25 +186,20 @@ class Form(QtCore.QObject):
         self.update_btn_export_name()
 
     # TODO: make host agnostic
-    def build_stepsize(self):
+    def get_stepsize(self):
         stepsize = self.stepsize.currentText()
-        data = {"1":"1", "1/2":"0.5", "1/4":"0.25", "1/8":"0.125", "1/16":"0.0625"}
-        return ["-step", data[stepsize]]
+        return DEFAULT_STEPSIZES[stepsize] # can modify this to be a tool variable
 
     # TODO: make host agnostic
-    def build_attrs(self):
-        '''Build out the string required for maya '''
+    def get_attributes(self):
+        '''Get standardized data for host to convert'''
         attr_list = []
         for i in range(self.to_attrs.count()):
             attr_list.append(self.to_attrs.item(i).text())
 
-        attrs = []
-        for attr in attr_list:
-            attrs += ['-attr',attr]
-        return attrs
+        return attr_list
 
-    # TODO: make host agnostic
-    def build_checkboxes(self):
+    def get_advanced_flags(self):
         checkboxes = self.window.findChildren(QtWidgets.QCheckBox, QtCore.QRegExp("_abcopt$"))
         values = []
         for x in checkboxes:
@@ -210,20 +209,16 @@ class Form(QtCore.QObject):
 
         return values
 
-    # TODO: make host agnostic
-    def build_maya_export(self):
-        ret = []
+    def get_export_items(self):
+        ret = {'selected_items':[],'key':self.cmbo_item_types.currentText()}#,'items':self.to_export.items()}
         for item in self.to_export.selectedItems():
-            ret += ['-root',item.text()]
-        return ret#['-root', self.to_export.currentItem().text()]
+            ret['selected_items'].append(item.text())
+        return ret
 
-    # TODO: make host agnostic
-    def build_fileout(self):
-        token = self.ftoken.text()
-        return ['-file', '%s/%s.abc' % (self.file_export_path,token)]
+    def get_fileout(self):
+        return '%s/%s.abc' % (self.file_export_path,self.ftoken.text())
 
-    # TODO: make host agnostic
-    def build_framerange(self):
+    def get_framerange(self):
         ret = []
         frameValue = self.duration.currentText()
         if self.get_framerange_callback:
@@ -231,41 +226,34 @@ class Form(QtCore.QObject):
             if cb:
                 ret += cb(frameValue)
 
-        # if range == 'Time Slider':
-        #     ret = ['-frameRange','1001','1001']
-        # if range == 'Current Frame':
-        #     ret = ['-frameRange','1002','1002']
         return ret
 
+    def get_process_location(self):
+        return self.runloc.currentText()
+
     # TODO: make host agnostic
-    def build_command(self):
-        cmd             = ['AbcExport','-j']
-        cmd            += self.build_framerange()
-        cmd            += ["-dataFormat", "ogawa"]
-        cmd            += self.build_fileout()
-        cmd            += self.build_maya_export()
-        cmd            += self.build_checkboxes()
-        cmd            += self.build_attrs()
-        cmd            += self.build_stepsize()
+    def get_command_keyvals(self):
+        cmd             = {
+        'framerange':self.get_framerange(),
+        'export_data':self.get_export_items(),
+        'flags':self.get_advanced_flags(),
+        'attributes':self.get_attributes(),
+        'file_out':self.get_fileout(),
+        'stepsize': self.get_stepsize(),
+        'process_location':self.get_process_location(),
+        }
 
         return cmd
 
 
     def export_handler(self):
         ''' The handler that is executed when the execute button is pressed '''
-        command_list    = self.build_command()
+        command_kvs    = self.get_command_keyvals()
         runloc          = self.runloc.currentText()
 
         errors = None
-        if runloc == 'Local':
-            command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
-            print("run local")
-            if self.process_form_callback:
-                errors = self.process_form_callback(command_list, run_on='local')
-        elif runloc == 'Farm':
-            print("run farm")
-            if self.process_form_callback:
-                errors = self.process_form_callback(command_list, run_on='farm')
+        if self.process_form_callback:
+            errors = self.process_form_callback(command_kvs)
 
         if errors:
             msg = QtWidgets.QMessageBox()
@@ -333,28 +321,98 @@ def get_maya_form(args=None):
     # load maya api
     from maya import cmds
 
+    # load acbExport plugin
+    load_plugin_result = cmds.loadPlugin( 'AbcExport.mll' )
+    print('LoadPlugin: AbcExport: %s'%load_plugin_result)
+    maya_item_type_callback = {'Selected':{'callback':lambda x:['%s'%i for i in cmds.ls(selection=1)]},
+                                    'Sets':{'callback':lambda x:['%s'%i for i in cmds.ls(sets=1)]},
+                                    # 'All':{'callback':lambda x:['%s'%i for i in cmds.ls()]},
+                                    # 'Cameras':{'callback':lambda x:['camera_%d'%i for i in range(4)]},
+                                    # 'Geometry':{'callback':lambda x:['geo_%d'%i for i in range(20)]},
+                                        }
+
     # callback for getting frame range options
     start           = cmds.playbackOptions( q=1, min=True )
     end             = cmds.playbackOptions( q=1, max=True )
     frame_range     = [start, end]
 
     current_frame   = cmds.currentTime(q=1)
-    frame_range_callback = {
+    maya_frame_range_callback = {
                             'Time Slider':{ 'callback':lambda x: frame_range },
                             'Current Frame':{ 'callback':lambda x: (current_frame,current_frame) },
     }
+
+    def maya_process_form_callback(command_kvs):
+
+        # dump info to console
+        print('='*80)
+        for k,v in command_kvs.items():
+            print('[%s] = %s'%(k,str(v)))
+        print('='*80)
+
+        t0 = time.time()
+        export_command = ''
+
+        # lets handle the process_location later (deadline or local)
+        for flag in command_kvs.get('flags',[]):
+            export_command += ' %s'%(flag)
+        for attr in command_kvs.get('attributes',[]):
+            export_command += ' -attr "%s"'%attr
+        if 'framerange' in command_kvs:
+            export_command += ' -framerange %s %s'%(command_kvs['framerange'][0],command_kvs['framerange'][1])
+        if 'file_out' in command_kvs:
+            export_command += ' -file "%s"'%command_kvs['file_out']
+        if 'stepsize' in command_kvs:
+            export_command += ' -step "%s"'%command_kvs['stepsize']
+        if 'export_data' in command_kvs:
+            xport_items = []
+            for item in command_kvs['export_data'].get('selected_items'):
+                if command_kvs['export_data']['key'] in ('Sets',):
+                    for i in cmds.sets( item, query=1):
+                        if i not in xport_items:
+                            xport_items.append('%s'%i)
+                else:
+                    xport_items.append('%s'%item)
+            for item in xport_items:       
+                export_command += ' -root "%s"'%item # may need to get full path here
+        export_command = str(export_command).strip()
+
+        # print('command_kvs: ', command_kvs)
+        print('export_command: ', export_command)
+        # run export
+        ret = cmds.AbcExport(j=export_command)
+        # check for file
+        abc_file = command_kvs.get('file_out')
+        # for s in export_command.split():
+        #     if s.lower().endswith('.abc'):
+        #         abc_file = s
+        #         break
+
+        if abc_file:
+            print('Size: %.2f (mb)  Date: %s   %s'%(os.path.getsize(abc_file)/100000.0, time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getctime(abc_file))) ,abc_file ) )
+        else:
+            print('Could not parse .abc file from args')
+
+        print('Completed in %.4f (sec)'%(time.time()-t0))
+
+
+        # build for farm ** Not Tested
+        # if run_on=='farm':
+        #     return ['Test error','second little problem','another thing happened','oh no!']
+        # command = '%s %s'%(command_list[0],command_list[1]) + ' "%s"'%(' '.join([str(s) for s in command_list[2:]]))
+        # # build for local ** Not Tested
+        # print('%s: %s'%(run_on,command))
+        return 0
+
+
     # callback for getting selected item type
 
     # return maya form
     maya_form = Form( UI_FILEPATH,#'alembicexporter.ui', 
-                process_form_callback=example_process_form_callback,
-                item_type_callback={'Selected':{'callback':lambda x:['item_%d'%i for i in range(7)]},
-                                    'Sets':{'callback':lambda x:['set_%d'%i for i in range(4)]},
-                                    # 'Cameras':{'callback':lambda x:['camera_%d'%i for i in range(4)]},
-                                    # 'Geometry':{'callback':lambda x:['geo_%d'%i for i in range(20)]},
-                                        },
-                get_framerange_callback=frame_range_callback,
-                file_export_path='d:/dev/data',
+                process_form_callback=maya_process_form_callback,
+                item_type_callback=maya_item_type_callback,
+                get_framerange_callback=maya_frame_range_callback,
+                file_export_path='H:/DEV/CBFX',
 
                 )
     return maya_form
